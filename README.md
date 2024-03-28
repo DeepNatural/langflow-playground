@@ -23,6 +23,23 @@ The easiest way to create and customize your flow
 <a href="https://github.com/logspace-ai/langflow">
 <img width="100%" src="https://github.com/logspace-ai/langflow/blob/dev/docs/static/img/new_langflow_demo.gif"></a>
 
+## conda 환경에서 langflow 실행하기
+
+**아래 명령을 실행하기 전, conda 환경 실행하기**
+
+```shell
+$ conda create -n langflow
+$ conda activate langflow
+$ pip install langflow
+$ langflow run
+```
+
+
+
+<br /><hr /><br />
+
+
+
 # 📦 Installation
 
 ### <b>Locally</b>

@@ -13,7 +13,7 @@ COPY poetry.lock pyproject.toml ./
 COPY ./ ./
 
 # Install dependencies
-RUN poetry config virtualenvs.create false && poetry install --no-interaction --no-ansi
+RUN poetry config virtualenvs.create false && poetry install --no-interaction --no-ansi -E deploy
 
 RUN poetry add botocore
 RUN poetry add pymysql
