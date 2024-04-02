@@ -27,6 +27,7 @@ import useAlertStore from "../../stores/alertStore";
 import useFlowStore from "../../stores/flowStore";
 import { FlowState } from "../../types/tabs";
 import { validateNodes } from "../../utils/reactflowUtils";
+import { createRandomString } from '../../utils/stringUtils';
 
 export default function FormModal({
   flow,
@@ -163,7 +164,9 @@ export default function FormModal({
         return;
       }
 
-      getBuildStatus(flow.id)
+      // getBuildStatus(flow.id)
+      // FIXME: 아래 코드 지우고, 위 주석 사용하기
+      getBuildStatus(`${flow.id}${(flow as any).TEMP_UUID}`)
         .then((response) => {
           if (response.data.built) {
             connectWS();
@@ -288,9 +291,19 @@ export default function FormModal({
   }
 
   function connectWS(): void {
+    // FIXME: WS 연결 시점에, UUID 생성하기
+    const tempUUID = createRandomString();
+
+    console.group('connectWS()');
+    console.log('flow: ', flow);
+    console.log('tempUUID: ', tempUUID);
+    console.groupEnd();
+
     try {
       const urlWs = getWebSocketUrl(
-        flow.id,
+        // flow.id,
+        // (`${flow.id}${(flow as any).TEMP_UUID}`),
+        (`${flow.id}-${tempUUID}`),
         process.env.NODE_ENV === "development"
       );
       const newWs = new WebSocket(urlWs);
@@ -319,7 +332,10 @@ export default function FormModal({
   }
 
   useEffect(() => {
-    connectWS();
+    if (open) {
+      connectWS();
+    }
+
     return () => {
       console.log(ws);
       if (ws.current) {

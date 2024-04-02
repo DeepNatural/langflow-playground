@@ -332,6 +332,10 @@ export async function getBuildStatus(
 export async function postBuildInit(
   flow: FlowType
 ): Promise<AxiosResponse<InitTypeAPI>> {
+  // TODO: 동일한 사용자가 복수 App 실행 테스트
+  // const TEMP_UUID = (flow as any)?.TEMP_UUID;
+  // return await api.post(`${BASE_URL_API}build/init/${flow.id}${TEMP_UUID}`, flow);
+
   return await api.post(`${BASE_URL_API}build/init/${flow.id}`, flow);
 }
 
