@@ -164,9 +164,8 @@ export default function FormModal({
         return;
       }
 
-      // getBuildStatus(flow.id)
       // FIXME: 아래 코드 지우고, 위 주석 사용하기
-      getBuildStatus(`${flow.id}${(flow as any).TEMP_UUID}`)
+      getBuildStatus(flow.id)
         .then((response) => {
           if (response.data.built) {
             connectWS();
@@ -316,6 +315,7 @@ export default function FormModal({
         //get chat history
       };
       newWs.onclose = (event) => {
+        console.log('서버로부터 WS close 메시지 받음');
         handleOnClose(event);
       };
       newWs.onerror = (ev) => {
