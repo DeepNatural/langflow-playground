@@ -316,6 +316,8 @@ export default function FormModal({
       };
       newWs.onclose = (event) => {
         console.log('서버로부터 WS close 메시지 받음');
+        // chatHistory 초기화
+        setChatHistory([]);
         handleOnClose(event);
       };
       newWs.onerror = (ev) => {
