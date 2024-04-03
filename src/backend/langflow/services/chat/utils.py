@@ -14,7 +14,7 @@ LANGCHAIN_RUNNABLES = (Chain, Runnable, AgentExecutor)
 async def process_graph(
     build_result,
     chat_inputs: ChatMessage,
-    client_id: str,
+    client_id_with_session: str,
     session_id: str,
 ):
     build_result = try_setting_streaming_options(build_result)
@@ -35,7 +35,7 @@ async def process_graph(
             result, intermediate_steps, raw_output = await get_result_and_steps(
                 build_result,
                 chat_inputs.message,
-                client_id=client_id,
+                client_id=client_id_with_session,
                 session_id=session_id,
             )
         else:

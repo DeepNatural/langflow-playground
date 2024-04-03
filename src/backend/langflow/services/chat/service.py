@@ -31,9 +31,9 @@ class ChatHistory(Subject):
         if not isinstance(message, FileResponse):
             self.notify()
 
-    def get_history(self, client_id: str, filter_messages=True) -> List[ChatMessage]:
+    def get_history(self, client_id_with_session: str, filter_messages=True) -> List[ChatMessage]:
         """Get the chat history for a client."""
-        if history := self.history.get(client_id, []):
+        if history := self.history.get(client_id_with_session, []):
             if filter_messages:
                 return [msg for msg in history if msg.type not in ["start", "stream"]]
             return history
@@ -89,15 +89,15 @@ class ChatService(Service):
 
             self.chat_history.add_message(self.chat_cache.current_client_id, chat_response)
 
-    async def connect(self, client_id: str, websocket: WebSocket):
-        self.active_connections[client_id] = websocket
+    async def connect(self, client_id_with_session: str, websocket: WebSocket):
+        self.active_connections[client_id_with_session] = websocket
         # This is to avoid having multiple clients with the same id
         #! Temporary solution
-        self.connection_ids[client_id] = f"{client_id}-{uuid.uuid4()}"
+        self.connection_ids[client_id_with_session] = f"{client_id_with_session}-{uuid.uuid4()}"
 
-    def disconnect(self, client_id: str):
-        self.active_connections.pop(client_id, None)
-        self.connection_ids.pop(client_id, None)
+    def disconnect(self, client_id_with_session: str):
+        self.active_connections.pop(client_id_with_session, None)
+        self.connection_ids.pop(client_id_with_session, None)
 
     async def send_message(self, client_id: str, message: str):
         websocket = self.active_connections[client_id]
@@ -107,27 +107,27 @@ class ChatService(Service):
         websocket = self.active_connections[client_id]
         await websocket.send_json(message.model_dump())
 
-    async def close_connection(self, client_id: str, code: int, reason: str):
-        if websocket := self.active_connections[client_id]:
+    async def close_connection(self, client_id_with_session: str, code: int, reason: str):
+        if websocket := self.active_connections[client_id_with_session]:
             try:
                 await websocket.close(code=code, reason=reason)
-                self.disconnect(client_id)
+                self.disconnect(client_id_with_session)
             except RuntimeError as exc:
                 # This is to catch the following error:
                 #  Unexpected ASGI message 'websocket.close', after sending 'websocket.close'
                 if "after sending" in str(exc):
                     logger.error(f"Error closing connection: {exc}")
 
-    async def process_message(self, client_id: str, payload: Dict, build_result: Any):
+    async def process_message(self, client_id: str, client_id_with_session: str, payload: Dict, build_result: Any):
         # Process the graph data and chat message
         chat_inputs = payload.pop("inputs", {})
         chatkey = payload.pop("chatKey", None)
         chat_inputs = ChatMessage(message=chat_inputs, chatKey=chatkey)
-        self.chat_history.add_message(client_id, chat_inputs)
+        self.chat_history.add_message(client_id_with_session, chat_inputs)
 
         # graph_data = payload
         start_resp = ChatResponse(message=None, type="start", intermediate_steps="")
-        await self.send_json(client_id, start_resp)
+        await self.send_json(client_id_with_session, start_resp)
 
         # is_first_message = len(self.chat_history.get_history(client_id=client_id)) <= 1
         # Generate result and thought
@@ -137,18 +137,18 @@ class ChatService(Service):
             result, intermediate_steps, raw_output = await process_graph(
                 build_result=build_result,
                 chat_inputs=chat_inputs,
-                client_id=client_id,
-                session_id=self.connection_ids[client_id],
+                client_id_with_session=client_id_with_session,
+                session_id=self.connection_ids[client_id_with_session],
             )
             self.set_cache(client_id, build_result)
         except Exception as e:
             # Log stack trace
             logger.exception(e)
-            self.chat_history.empty_history(client_id)
+            self.chat_history.empty_history(client_id_with_session)
             raise e
         # Send a response back to the frontend, if needed
         intermediate_steps = intermediate_steps or ""
-        history = self.chat_history.get_history(client_id, filter_messages=False)
+        history = self.chat_history.get_history(client_id_with_session, filter_messages=False)
         file_responses = []
         if history:
             # Iterate backwards through the history
@@ -169,8 +169,8 @@ class ChatService(Service):
             type="end",
             files=file_responses,
         )
-        await self.send_json(client_id, response)
-        self.chat_history.add_message(client_id, response)
+        await self.send_json(client_id_with_session, response)
+        self.chat_history.add_message(client_id_with_session, response)
 
     def set_cache(self, client_id: str, langchain_object: Any) -> bool:
         """
@@ -186,11 +186,11 @@ class ChatService(Service):
         self.cache_service.upsert(client_id, result_dict)
         return client_id in self.cache_service
 
-    async def handle_websocket(self, client_id: str, websocket: WebSocket):
-        await self.connect(client_id, websocket)
+    async def handle_websocket(self, client_id: str, client_id_with_session: str, websocket: WebSocket):
+        await self.connect(client_id_with_session, websocket)
 
         try:
-            chat_history = self.chat_history.get_history(client_id)
+            chat_history = self.chat_history.get_history(client_id_with_session)
             # iterate and make BaseModel into dict
             chat_history = [chat.model_dump() for chat in chat_history]
             await websocket.send_json(chat_history)
@@ -202,12 +202,12 @@ class ChatService(Service):
                 elif isinstance(json_payload, dict):
                     payload = json_payload
                 if "clear_history" in payload and payload["clear_history"]:
-                    self.chat_history.history[client_id] = []
+                    self.chat_history.history[client_id_with_session] = []
                     continue
 
-                with self.chat_cache.set_client_id(client_id):
+                with self.chat_cache.set_client_id(client_id_with_session):
                     if build_result := self.cache_service.get(client_id).get("result"):
-                        await self.process_message(client_id, payload, build_result)
+                        await self.process_message(client_id, client_id_with_session, payload, build_result)
 
                     else:
                         raise RuntimeError(f"Could not find a build result for client_id {client_id}")
@@ -216,25 +216,25 @@ class ChatService(Service):
             logger.exception(f"Error handling websocket: {exc}")
             if websocket.client_state == WebSocketState.CONNECTED:
                 await self.close_connection(
-                    client_id=client_id,
+                    client_id_with_session=client_id_with_session,
                     code=status.WS_1011_INTERNAL_ERROR,
                     reason=str(exc),
                 )
             elif websocket.client_state == WebSocketState.DISCONNECTED:
-                self.disconnect(client_id)
+                self.disconnect(client_id_with_session)
 
         finally:
             try:
                 # first check if the connection is still open
                 if websocket.client_state == WebSocketState.CONNECTED:
                     await self.close_connection(
-                        client_id=client_id,
+                        client_id_with_session=client_id_with_session,
                         code=status.WS_1000_NORMAL_CLOSURE,
                         reason="Client disconnected",
                     )
             except Exception as exc:
                 logger.error(f"Error closing connection: {exc}")
-            self.disconnect(client_id)
+            self.disconnect(client_id_with_session)
 
 
 def dict_to_markdown_table(my_dict):

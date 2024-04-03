@@ -36,6 +36,7 @@ async def chat(
 ):
     """Websocket endpoint for chat."""
     try:
+        client_id_with_session = client_id
         user = await get_current_user_for_websocket(websocket, db)
         await websocket.accept()
         if not user:
@@ -43,8 +44,9 @@ async def chat(
         elif not user.is_active:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Unauthorized")
 
+        client_id = client_id_with_session.replace("-" + client_id_with_session.split("-")[-1], "")
         if client_id in chat_service.cache_service:
-            await chat_service.handle_websocket(client_id, websocket)
+            await chat_service.handle_websocket(client_id, client_id_with_session, websocket)
         else:
             # We accept the connection but close it immediately
             # if the flow is not built yet
